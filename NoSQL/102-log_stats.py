@@ -1,35 +1,29 @@
 #!/usr/bin/env python3
-"""Module for improved version of log_stats function"""
+"""Prints statistics from the nginx collection"""
 from pymongo import MongoClient
 
 
-METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
-PIPE = [{"$group": {"_id": "$ip", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}, {"$limit": 10}]
-
-
-def log_stats(mongo_collection, option=None):
-    """Function for logging stats"""
-    items = {}
-    if option:
-        value = mongo_collection.count_documents(
-            {"method": {"$regex": option}})
-        print(f"\tmethod {option}: {value}")
-        return
-
-    result = mongo_collection.count_documents(items)
-    print(f"{result} logs")
-    print("Methods:")
-    for method in METHODS:
-        log_stats(nginx_collection, method)
-    status_check = mongo_collection.count_documents({"path": "/status"})
-    print(f"{status_check} status check")
-    print("IPs:")
-
-    for ip in mongo_collection.aggregate(PIPE):
-        print(f"\t{ip.get('_id')}: {ip.get('count')}")
-
-
 if __name__ == "__main__":
-    nginx_collection = MongoClient('mongodb://127.0.0.1:27017').logs.nginx
-    log_stats(nginx_collection)
+    client = MongoClient('mongodb://127.0.0.1:27017')
+    logs = client.logs.nginx
+
+    print(logs.count_documents({}), 'logs')
+    print('Methods:')
+    method = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+    for req in method:
+        print(f'\tmethod {req}:', logs.count_documents({'method': req}))
+    print(logs.count_documents({'method': 'GET','path': '/status'}), 'status check')
+
+
+    print('IPs:')
+    ip_counts = logs.aggregate(
+        [ { "$group" :
+                { "_id": "$ip",
+                  "count": { "$sum": 1 }
+                }
+          }, 
+          { "$sort": {"count": -1} },
+          { "$limit": 10 } ]
+    )
+    for data in ip_counts:
+        print(f"\t{data['_id']}: {data['count']}")
